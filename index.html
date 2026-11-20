@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fcfcfa" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14161a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="フォオキャッチ" />
+    <title>フォオキャッチ</title>
+    <style>
+      :root {
+        --bg: #fcfcfa;
+        --ink: #1c1c1a;
+        --ink-soft: #6d6d66;
+        --accent: #ff5a4e;
+        --gold: #d9930d;
+        --panel: #ffffff;
+        --line: #e4e4dc;
+        --btn-bg: #1c1c1a;
+        --btn-ink: #fcfcfa;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14161a;
+          --ink: #f2f1e9;
+          --ink-soft: #9a9a92;
+          --accent: #ff7a6e;
+          --gold: #f0b93e;
+          --panel: #1d2026;
+          --line: #33363e;
+          --btn-bg: #f2f1e9;
+          --btn-ink: #14161a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; overscroll-behavior: none; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+      }
+      button { min-height: 2.75rem; }
+
+      /* ---------- HUD ---------- */
+      .hud {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        padding: calc(0.6rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) 0.6rem calc(1rem + env(safe-area-inset-left));
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .hud .stat {
+        display: flex;
+        align-items: baseline;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+      .hud .stat b {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .hud .lives {
+        font-size: 1.1rem;
+        letter-spacing: 0.15em;
+        color: var(--accent);
+        line-height: 1;
+      }
+      .hud .lives .lost { color: var(--line); }
+      .hud .spacer { flex: 1; }
+      .icon-btn {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        border-radius: 999px;
+        padding: 0 1rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .icon-btn:active { transform: scale(0.96); }
+
+      /* ---------- Stage ---------- */
+      .stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+      }
+      canvas {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+        cursor: pointer;
+      }
+
+      /* ---------- Overlay panels ---------- */
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+      }
+      .overlay[hidden] { display: none; }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 1.6rem 1.5rem 1.4rem;
+        max-width: 26rem;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.10);
+      }
+      .panel .aa {
+        font-family: ui-monospace, "Courier New", monospace;
+        white-space: pre;
+        line-height: 1.5;
+        font-size: clamp(0.72rem, 3.4vw, 0.95rem);
+        color: var(--ink);
+        margin: 0 0 0.4rem;
+        overflow: hidden;
+      }
+      .panel h1, .panel h2 {
+        margin: 0.2rem 0 0.5rem;
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+      .panel p {
+        margin: 0.4rem 0;
+        font-size: 0.92rem;
+        line-height: 1.7;
+        color: var(--ink-soft);
+      }
+      .panel p b { color: var(--ink); }
+      .gold-word { color: var(--gold); font-weight: 800; }
+      .big-btn {
+        margin-top: 1rem;
+        width: 100%;
+        border: none;
+        border-radius: 999px;
+        background: var(--btn-bg);
+        color: var(--btn-ink);
+        font-size: 1.05rem;
+        font-weight: 800;
+        padding: 0.9rem 1rem;
+        cursor: pointer;
+        min-height: 3.25rem;
+      }
+      .big-btn:active { transform: scale(0.98); }
+      .install-btn {
+        margin-top: 0.6rem;
+        width: 100%;
+        border: 1.5px solid var(--ink);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--ink);
+        font-size: 0.95rem;
+        font-weight: 800;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        min-height: 3rem;
+      }
+      .install-btn:active { transform: scale(0.98); }
+      .install-btn[hidden] { display: none; }
+      .install-note {
+        margin-top: 0.9rem !important;
+        font-size: 0.8rem !important;
+        line-height: 1.65 !important;
+      }
+      html.standalone .install-note,
+      html.standalone .install-btn { display: none; }
+      .final-score {
+        font-size: 2.6rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        margin: 0.3rem 0 0;
+      }
+      .final-score small {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--ink-soft);
+        letter-spacing: 0.12em;
+      }
+      .new-record[hidden] { display: none; }
+      .new-record {
+        display: inline-block;
+        margin-top: 0.5rem;
+        padding: 0.15rem 0.7rem;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      .hint {
+        padding: 0.55rem 1rem calc(0.55rem + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line);
+        text-align: center;
+        font-size: 0.8rem;
+        color: var(--ink-soft);
+      }
+      .hint .aa-inline {
+        font-family: ui-monospace, "Courier New", monospace;
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hud" aria-label="スコア表示">
+      <div class="stat">スコア <b id="score">0</b></div>
+      <div class="stat">ベスト <b id="best">0</b></div>
+      <div class="stat">コンボ <b id="combo">0</b></div>
+      <div class="lives" id="lives" aria-label="残りライフ">♥♥♥</div>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="soundBtn" type="button" aria-label="音のオン・オフ">音 オン</button>
+    </header>
+
+    <div class="stage">
+      <canvas id="game" aria-label="キャッチゲームの画面"></canvas>
+
+      <div class="overlay" id="startOverlay">
+        <div class="panel">
+          <p class="aa" aria-hidden="true">　。　　⊂U⊃　　。　　⊂U⊃　。
+　⊂U⊃　。　　⊂U⊃　。　　　。
+　　。　⊂U⊃　　。　　⊂U⊃　。
+　　　└('ω')┘ フォオ</p>
+          <h1>キャッチゲーム</h1>
+          <p>空から <b>⊂U⊃</b> が降ってきた！<br />
+          下の <b>('ω')</b> を左右に動かして、落とさずキャッチしよう。</p>
+          <p><span class="gold-word">金色の ⊂U⊃</span> は <b>50点</b>。ふつうは <b>10点</b>。<br />
+          3回落としたらゲームオーバー。連続キャッチでコンボが伸びるよ。</p>
+          <button class="big-btn" id="startBtn" type="button">ゲームスタート</button>
+          <button class="install-btn" id="installBtn" type="button" hidden>ホーム画面に追加</button>
+          <p class="install-note">ホーム画面に追加すると、アプリみたいに全画面で遊べるよ。<br />
+          iPhone：共有ボタン →「ホーム画面に追加」<br />
+          Android：メニュー →「アプリをインストール」</p>
+        </div>
+      </div>
+
+      <div class="overlay" id="overOverlay" hidden>
+        <div class="panel">
+          <p class="aa" aria-hidden="true">　('；ω；')　ｳｯ…</p>
+          <h2>ゲームオーバー</h2>
+          <p class="final-score"><small>スコア</small><span id="finalScore">0</span></p>
+          <span class="new-record" id="newRecord" hidden>ベスト更新！</span>
+          <p id="finalCombo"></p>
+          <button class="big-btn" id="retryBtn" type="button">もう一度あそぶ</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="hint">
+      指やマウスでドラッグ / ← → キーで <span class="aa-inline">└('ω')┘</span> が動くよ
+    </footer>
+
+    <script>
+      (function () {
+        'use strict';
+
+        var canvas = document.getElementById('game');
+        var ctx = canvas.getContext('2d');
+        var scoreEl = document.getElementById('score');
+        var bestEl = document.getElementById('best');
+        var comboEl = document.getElementById('combo');
+        var livesEl = document.getElementById('lives');
+        var startOverlay = document.getElementById('startOverlay');
+        var overOverlay = document.getElementById('overOverlay');
+        var finalScoreEl = document.getElementById('finalScore');
+        var finalComboEl = document.getElementById('finalCombo');
+        var newRecordEl = document.getElementById('newRecord');
+        var soundBtn = document.getElementById('soundBtn');
+
+        var FONT = 'ui-monospace, "Courier New", "Hiragino Kaku Gothic ProN", monospace';
+
+        var W = 0, H = 0, DPR = 1;
+
+        function resize() {
+          // Measure the stage (parent), not the canvas: with an intrinsic
+          // aspect ratio from its bitmap attributes, the canvas box cannot
+          // be trusted to report the stage size back.
+          var rect = canvas.parentElement.getBoundingClientRect();
+          DPR = Math.min(window.devicePixelRatio || 1, 2);
+          W = rect.width;
+          H = rect.height;
+          canvas.style.width = W + 'px';
+          canvas.style.height = H + 'px';
+          canvas.width = Math.round(W * DPR);
+          canvas.height = Math.round(H * DPR);
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          player.y = H - Math.max(46, H * 0.09);
+          player.x = clamp(player.x || W / 2, 0, W);
+        }
+
+        function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+        function cssVar(name) {
+          return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+        var colors = { ink: '#1c1c1a', soft: '#6d6d66', accent: '#ff5a4e', gold: '#d9930d' };
+        function refreshColors() {
+          colors.ink = cssVar('--ink') || colors.ink;
+          colors.soft = cssVar('--ink-soft') || colors.soft;
+          colors.accent = cssVar('--accent') || colors.accent;
+          colors.gold = cssVar('--gold') || colors.gold;
+        }
+
+        /* ---------------- Sound (tiny WebAudio synth) ---------------- */
+        var audioCtx = null;
+        var soundOn = true;
+        function ensureAudio() {
+          if (!audioCtx) {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) audioCtx = new AC();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        function blip(freq, dur, type, vol, slideTo) {
+          if (!soundOn || !audioCtx) return;
+          var t = audioCtx.currentTime;
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.type = type || 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+          gain.gain.setValueAtTime(vol || 0.12, t);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(t); osc.stop(t + dur + 0.02);
+        }
+        function sndCatch(combo) {
+          var base = 520 + Math.min(combo, 12) * 40;
+          blip(base, 0.12, 'sine', 0.14, base * 1.6);
+        }
+        function sndGold() {
+          blip(880, 0.1, 'triangle', 0.14);
+          setTimeout(function () { blip(1174, 0.12, 'triangle', 0.14); }, 60);
+          setTimeout(function () { blip(1568, 0.18, 'triangle', 0.14); }, 120);
+        }
+        function sndMiss() { blip(220, 0.25, 'sawtooth', 0.07, 110); }
+        function sndOver() {
+          blip(392, 0.2, 'triangle', 0.12);
+          setTimeout(function () { blip(330, 0.2, 'triangle', 0.12); }, 180);
+          setTimeout(function () { blip(262, 0.4, 'triangle', 0.12); }, 360);
+        }
+
+        soundBtn.addEventListener('click', function () {
+          soundOn = !soundOn;
+          soundBtn.textContent = soundOn ? '音 オン' : '音 オフ';
+          if (soundOn) { ensureAudio(); blip(660, 0.1, 'sine', 0.1); }
+        });
+
+        /* ---------------- Game state ---------------- */
+        var STATE = { READY: 0, PLAYING: 1, OVER: 2 };
+        var state = STATE.READY;
+
+        var player = {
+          x: 0, y: 0, targetX: 0,
+          face: "('ω')",
+          mood: 'normal', // normal | happy | sad
+          moodUntil: 0,
+          catchFlashUntil: 0
+        };
+
+        var items = [];      // falling ⊂U⊃
+        var particles = [];  // catch burst dots
+        var popups = [];     // floating texts (フォオ！ etc.)
+        var snow = [];       // background drifting 。
+
+        var score = 0, best = 0, combo = 0, maxCombo = 0, lives = 3;
+        var elapsed = 0, spawnTimer = 0, shakeUntil = 0, shakeMag = 0;
+
+        function itemFontSize() { return clamp(W * 0.075, 26, 44); }
+        function playerFontSize() { return clamp(W * 0.085, 30, 52); }
+
+        function resetSnow() {
+          snow = [];
+          var n = Math.round(W / 26);
+          for (var i = 0; i < n; i++) {
+            snow.push({
+              x: Math.random() * W,
+              y: Math.random() * H,
+              vy: 12 + Math.random() * 26,
+              drift: Math.random() * Math.PI * 2,
+              ch: Math.random() < 0.5 ? '。' : '・',
+              size: 10 + Math.random() * 8
+            });
+          }
+        }
+
+        function spawnItem() {
+          var fs = itemFontSize();
+          var gold = Math.random() < 0.12;
+          var speedBase = 120 + elapsed * 6 + Math.random() * 60;
+          items.push({
+            x: fs + Math.random() * (W - fs * 2),
+            y: -30,
+            vy: gold ? speedBase * 1.25 : speedBase,
+            swayPhase: Math.random() * Math.PI * 2,
+            swayAmp: 8 + Math.random() * 16,
+            gold: gold
+          });
+        }
+
+        function burst(x, y, gold) {
+          var chars = ['。', '・', '°', '*'];
+          for (var i = 0; i < 10; i++) {
+            var a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
+            var sp = 40 + Math.random() * 90;
+            particles.push({
+              x: x, y: y,
+              vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30,
+              life: 0.55, maxLife: 0.55,
+              ch: chars[i % chars.length],
+              gold: gold
+            });
+          }
+        }
+
+        function addPopup(x, y, text, color, size) {
+          popups.push({ x: x, y: y, text: text, color: color, size: size || 20, life: 0.9, maxLife: 0.9 });
+        }
+
+        function startGame() {
+          ensureAudio();
+          score = 0; combo = 0; maxCombo = 0; lives = 3;
+          elapsed = 0; spawnTimer = 0.4;
+          items = []; particles = []; popups = [];
+          player.mood = 'normal';
+          player.x = W / 2; player.targetX = W / 2;
+          state = STATE.PLAYING;
+          startOverlay.hidden = true;
+          overOverlay.hidden = true;
+          updateHud();
+          blip(523, 0.1, 'triangle', 0.1);
+          setTimeout(function () { blip(784, 0.14, 'triangle', 0.1); }, 90);
+        }
+
+        function gameOver() {
+          state = STATE.OVER;
+          var isRecord = score > best;
+          if (isRecord) best = score;
+          finalScoreEl.textContent = score;
+          finalComboEl.textContent = '最大コンボ ' + maxCombo + ' ／ ベスト ' + best;
+          newRecordEl.hidden = !isRecord;
+          overOverlay.hidden = false;
+          updateHud();
+          sndOver();
+        }
+
+        function updateHud() {
+          scoreEl.textContent = score;
+          bestEl.textContent = best;
+          comboEl.textContent = combo;
+          var s = '';
+          for (var i = 0; i < 3; i++) {
+            s += i < lives ? '♥' : '<span class="lost">♥</span>';
+          }
+          livesEl.innerHTML = s;
+        }
+
+        /* ---------------- Input ---------------- */
+        function pointerToX(clientX) {
+          var rect = canvas.getBoundingClientRect();
+          return clamp(clientX - rect.left, 0, W);
+        }
+        canvas.addEventListener('pointermove', function (e) {
+          player.targetX = pointerToX(e.clientX);
+        });
+        canvas.addEventListener('pointerdown', function (e) {
+          player.targetX = pointerToX(e.clientX);
+          ensureAudio();
+        });
+        var keys = {};
+        window.addEventListener('keydown', function (e) {
+          keys[e.key] = true;
+          if ((e.key === ' ' || e.key === 'Enter') && state !== STATE.PLAYING) {
+            e.preventDefault();
+            startGame();
+          }
+        });
+        window.addEventListener('keyup', function (e) { keys[e.key] = false; });
+
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+
+        /* ---------------- PWA: standalone / install ---------------- */
+        var installBtn = document.getElementById('installBtn');
+        var isStandalone = (window.navigator.standalone === true) ||
+          (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+        if (isStandalone) document.documentElement.classList.add('standalone');
+
+        var deferredInstall = null;
+        var showInstallUI = null;
+        window.addEventListener('beforeinstallprompt', function (e) {
+          e.preventDefault();
+          deferredInstall = e;
+          // Keep a bound handle to the event's install UI method.
+          showInstallUI = e.prompt.bind(e);
+          if (!isStandalone) installBtn.hidden = false;
+        });
+        installBtn.addEventListener('click', function () {
+          if (!deferredInstall || !showInstallUI) return;
+          showInstallUI();
+          deferredInstall.userChoice.then(function () {
+            deferredInstall = null;
+            showInstallUI = null;
+            installBtn.hidden = true;
+          });
+        });
+        window.addEventListener('appinstalled', function () {
+          deferredInstall = null;
+          showInstallUI = null;
+          installBtn.hidden = true;
+          document.documentElement.classList.add('standalone');
+        });
+
+        // Offline support: register the service worker when the host allows it.
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker.register('sw.js').catch(function () {
+              /* sandboxed preview hosts refuse registration; the game still runs */
+            });
+          });
+        }
+
+        /* ---------------- Update ---------------- */
+        function update(dt, now) {
+          // background snow always drifts
+          for (var i = 0; i < snow.length; i++) {
+            var s = snow[i];
+            s.y += s.vy * dt;
+            s.drift += dt * 0.8;
+            s.x += Math.sin(s.drift) * 8 * dt;
+            if (s.y > H + 12) { s.y = -12; s.x = Math.random() * W; }
+          }
+
+          if (state !== STATE.PLAYING) return;
+
+          elapsed += dt;
+
+          // keyboard movement
+          var kSpeed = W * 1.4 * dt;
+          if (keys['ArrowLeft'] || keys['a']) player.targetX -= kSpeed;
+          if (keys['ArrowRight'] || keys['d']) player.targetX += kSpeed;
+          player.targetX = clamp(player.targetX, 0, W);
+
+          // player eases toward target
+          player.x += (player.targetX - player.x) * Math.min(1, dt * 18);
+          player.x = clamp(player.x, 0, W);
+
+          // spawning: interval shrinks over time
+          spawnTimer -= dt;
+          if (spawnTimer <= 0) {
+            spawnItem();
+            var interval = Math.max(0.38, 0.95 - elapsed * 0.012);
+            spawnTimer = interval * (0.7 + Math.random() * 0.6);
+          }
+
+          var pfs = playerFontSize();
+          var catchHalf = pfs * 1.55; // roughly half the width of └('ω')┘
+          var ifs = itemFontSize();
+
+          for (var j = items.length - 1; j >= 0; j--) {
+            var it = items[j];
+            it.y += it.vy * dt;
+            it.swayPhase += dt * 2;
+            var ix = it.x + Math.sin(it.swayPhase) * it.swayAmp;
+
+            // caught?
+            if (it.y >= player.y - ifs * 0.55 && it.y <= player.y + 14 &&
+                Math.abs(ix - player.x) <= catchHalf) {
+              items.splice(j, 1);
+              combo++;
+              if (combo > maxCombo) maxCombo = combo;
+              var pts = it.gold ? 50 : 10 + Math.min(40, Math.floor(combo / 5) * 5);
+              score += pts;
+              player.mood = 'happy';
+              player.moodUntil = now + 450;
+              player.catchFlashUntil = now + 180;
+              burst(ix, player.y - ifs * 0.4, it.gold);
+              if (it.gold) {
+                addPopup(ix, player.y - ifs * 1.6, 'フォオオ！！ +' + pts, colors.gold, 24);
+                sndGold();
+              } else {
+                var word = combo >= 10 ? 'フォオオ！' : (combo >= 5 ? 'フォオ！' : 'フォッ');
+                addPopup(ix, player.y - ifs * 1.6, word + ' +' + pts, colors.accent, combo >= 5 ? 22 : 17);
+                sndCatch(combo);
+              }
+              updateHud();
+              continue;
+            }
+
+            // missed
+            if (it.y > H + 20) {
+              items.splice(j, 1);
+              if (!it.gold) {
+                lives--;
+                combo = 0;
+                player.mood = 'sad';
+                player.moodUntil = now + 700;
+                shakeUntil = now + 220; shakeMag = 6;
+                addPopup(ix, H - 90, 'おとした…', colors.soft, 17);
+                sndMiss();
+                updateHud();
+                if (lives <= 0) { gameOver(); return; }
+              }
+            }
+          }
+
+          // particles
+          for (var p = particles.length - 1; p >= 0; p--) {
+            var pt = particles[p];
+            pt.life -= dt;
+            pt.x += pt.vx * dt;
+            pt.y += pt.vy * dt;
+            pt.vy += 160 * dt;
+            if (pt.life <= 0) particles.splice(p, 1);
+          }
+          // popups
+          for (var q = popups.length - 1; q >= 0; q--) {
+            var pu = popups[q];
+            pu.life -= dt;
+            pu.y -= 42 * dt;
+            if (pu.life <= 0) popups.splice(q, 1);
+          }
+
+          if (player.mood !== 'normal' && now > player.moodUntil) player.mood = 'normal';
+        }
+
+        /* ---------------- Draw ---------------- */
+        function draw(now) {
+          ctx.clearRect(0, 0, W, H);
+
+          var shakeX = 0, shakeY = 0;
+          if (now < shakeUntil) {
+            shakeX = (Math.random() - 0.5) * 2 * shakeMag;
+            shakeY = (Math.random() - 0.5) * 2 * shakeMag;
+          }
+          ctx.save();
+          ctx.translate(shakeX, shakeY);
+
+          // snow dots
+          ctx.fillStyle = colors.soft;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          for (var i = 0; i < snow.length; i++) {
+            var s = snow[i];
+            ctx.font = s.size + 'px ' + FONT;
+            ctx.globalAlpha = 0.5;
+            ctx.fillText(s.ch, s.x, s.y);
+          }
+          ctx.globalAlpha = 1;
+
+          // ground line
+          ctx.strokeStyle = colors.soft;
+          ctx.globalAlpha = 0.35;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(10, H - 14);
+          ctx.lineTo(W - 10, H - 14);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+
+          // falling items
+          var ifs = itemFontSize();
+          ctx.font = '700 ' + ifs + 'px ' + FONT;
+          for (var j = 0; j < items.length; j++) {
+            var it = items[j];
+            var ix = it.x + Math.sin(it.swayPhase) * it.swayAmp;
+            ctx.fillStyle = it.gold ? colors.gold : colors.ink;
+            ctx.fillText('⊂U⊃', ix, it.y);
+            if (it.gold) {
+              ctx.font = '400 ' + Math.round(ifs * 0.45) + 'px ' + FONT;
+              ctx.fillText('✦', ix - ifs * 0.85, it.y - ifs * 0.4);
+              ctx.fillText('✦', ix + ifs * 0.85, it.y + ifs * 0.25);
+              ctx.font = '700 ' + ifs + 'px ' + FONT;
+            }
+          }
+
+          // particles
+          for (var p = 0; p < particles.length; p++) {
+            var pt = particles[p];
+            ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
+            ctx.fillStyle = pt.gold ? colors.gold : colors.accent;
+            ctx.font = '16px ' + FONT;
+            ctx.fillText(pt.ch, pt.x, pt.y);
+          }
+          ctx.globalAlpha = 1;
+
+          // player
+          var pfs = playerFontSize();
+          ctx.font = '700 ' + pfs + 'px ' + FONT;
+          var face = player.mood === 'sad' ? "('；ω；')" : player.face;
+          var body = '└' + face + '┘';
+          if (now < player.catchFlashUntil) {
+            ctx.fillStyle = colors.accent;
+          } else {
+            ctx.fillStyle = colors.ink;
+          }
+          ctx.fillText(body, player.x, player.y);
+          if (player.mood === 'happy') {
+            ctx.font = '800 ' + Math.round(pfs * 0.5) + 'px ' + FONT;
+            ctx.fillStyle = colors.accent;
+            ctx.textAlign = 'left';
+            ctx.fillText('フォオ', player.x + pfs * 1.7, player.y - pfs * 0.15);
+            ctx.textAlign = 'center';
+          }
+
+          // popups
+          for (var q = 0; q < popups.length; q++) {
+            var pu = popups[q];
+            ctx.globalAlpha = Math.max(0, pu.life / pu.maxLife);
+            ctx.fillStyle = pu.color;
+            ctx.font = '800 ' + pu.size + 'px ' + FONT;
+            ctx.fillText(pu.text, clamp(pu.x, 70, W - 70), pu.y);
+          }
+          ctx.globalAlpha = 1;
+
+          ctx.restore();
+        }
+
+        /* ---------------- Loop ---------------- */
+        var last = 0;
+        function frame(ts) {
+          if (!last) last = ts;
+          var dt = Math.min(0.05, (ts - last) / 1000);
+          last = ts;
+          update(dt, ts);
+          draw(ts);
+          requestAnimationFrame(frame);
+        }
+
+        window.addEventListener('resize', function () { resize(); resetSnow(); });
+        // The shell around the page can change size without a window resize
+        // (webview sheets, iframe embeds): watch the canvas itself instead.
+        if (window.ResizeObserver) {
+          var lastW = 0, lastH = 0;
+          new ResizeObserver(function () {
+            var rect = canvas.parentElement.getBoundingClientRect();
+            if (Math.abs(rect.width - lastW) > 1 || Math.abs(rect.height - lastH) > 1) {
+              lastW = rect.width; lastH = rect.height;
+              resize(); resetSnow();
+            }
+          }).observe(canvas.parentElement);
+        }
+        window.addEventListener('load', function () { resize(); resetSnow(); });
+        if (window.matchMedia) {
+          var mq = window.matchMedia('(prefers-color-scheme: dark)');
+          if (mq.addEventListener) mq.addEventListener('change', refreshColors);
+        }
+
+        refreshColors();
+        resize();
+        resetSnow();
+        updateHud();
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
