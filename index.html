@@ -339,10 +339,6 @@
         var audioCtx = null;
         var soundOn = true;
         function ensureAudio() {
-          // iPhoneの消音モードでも鳴るよう、再生カテゴリに切り替える (Safari 17+)
-          if ('audioSession' in navigator) {
-            try { navigator.audioSession.type = 'playback'; } catch (e) {}
-          }
           if (!audioCtx) {
             var AC = window.AudioContext || window.webkitAudioContext;
             if (AC) audioCtx = new AC();
