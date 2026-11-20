@@ -339,11 +339,26 @@
         var audioCtx = null;
         var soundOn = true;
         function ensureAudio() {
+          // iPhoneの消音モードでも鳴るよう、再生カテゴリに切り替える (Safari 17+)
+          if ('audioSession' in navigator) {
+            try { navigator.audioSession.type = 'playback'; } catch (e) {}
+          }
           if (!audioCtx) {
             var AC = window.AudioContext || window.webkitAudioContext;
             if (AC) audioCtx = new AC();
           }
           if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+          // iOS向けアンロック: 無音バッファを1回再生しておく
+          if (audioCtx && !ensureAudio._unlocked) {
+            try {
+              var buf = audioCtx.createBuffer(1, 1, 22050);
+              var src = audioCtx.createBufferSource();
+              src.buffer = buf;
+              src.connect(audioCtx.destination);
+              src.start(0);
+              ensureAudio._unlocked = true;
+            } catch (e) {}
+          }
         }
         function blip(freq, dur, type, vol, slideTo) {
           if (!soundOn || !audioCtx) return;
@@ -360,7 +375,7 @@
         }
         function sndCatch(combo) {
           var base = 520 + Math.min(combo, 12) * 40;
-          blip(base, 0.12, 'sine', 0.14, base * 1.6);
+          blip(base, 0.12, 'sine', 0.2, base * 1.6);
         }
         function sndGold() {
           blip(880, 0.1, 'triangle', 0.14);
