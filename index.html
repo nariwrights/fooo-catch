@@ -215,6 +215,22 @@
         letter-spacing: 0.12em;
       }
       .new-record[hidden] { display: none; }
+      .rank-box { margin: 10px auto 4px; max-width: 300px; text-align: left; }
+      .rank-box h3 { margin: 0 0 6px; font-size: 14px; text-align: center; color: var(--ink-soft); letter-spacing: 0.08em; }
+      .rank-list { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+      .rank-list li { display: flex; gap: 8px; padding: 3px 8px; border-radius: 8px; }
+      .rank-list li .rk { width: 2em; font-weight: 700; color: var(--ink-soft); }
+      .rank-list li .rs { margin-left: auto; font-weight: 700; }
+      .rank-list li .rd { color: var(--ink-soft); font-size: 12px; align-self: center; }
+      .rank-list li.now { background: var(--accent); color: #fff; }
+      .rank-list li.now .rk, .rank-list li.now .rd { color: #fff; }
+      .rank-line { font-weight: 800; margin: 6px 0 0; }
+      .share-btn {
+        margin-top: 10px; padding: 10px 18px; border-radius: 999px;
+        border: 2px solid var(--ink); background: transparent; color: var(--ink);
+        font-size: 15px; font-weight: 700; cursor: pointer;
+      }
+      .share-btn:active { transform: scale(0.97); }
       .new-record {
         display: inline-block;
         margin-top: 0.5rem;
@@ -280,7 +296,14 @@
           <p class="final-score"><small>スコア</small><span id="finalScore">0</span></p>
           <span class="new-record" id="newRecord" hidden>ベスト更新！</span>
           <p id="finalCombo"></p>
+          <p class="rank-line" id="finalRank"></p>
+          <div class="rank-box" id="rankBox" hidden>
+            <h3>マイランキング（この端末）</h3>
+            <ol class="rank-list" id="rankList"></ol>
+          </div>
           <button class="big-btn" id="retryBtn" type="button">もう一度あそぶ</button>
+          <br />
+          <button class="share-btn" id="shareBtn" type="button">スコアを共有する</button>
         </div>
       </div>
     </div>
@@ -302,6 +325,10 @@
         var startOverlay = document.getElementById('startOverlay');
         var overOverlay = document.getElementById('overOverlay');
         var finalScoreEl = document.getElementById('finalScore');
+        var finalRankEl = document.getElementById('finalRank');
+        var rankBoxEl = document.getElementById('rankBox');
+        var rankListEl = document.getElementById('rankList');
+        var shareBtn = document.getElementById('shareBtn');
         var finalComboEl = document.getElementById('finalCombo');
         var newRecordEl = document.getElementById('newRecord');
         var soundBtn = document.getElementById('soundBtn');
@@ -421,6 +448,52 @@
         var snow = [];       // background drifting 。
 
         var score = 0, best = 0, combo = 0, maxCombo = 0, lives = 3;
+
+        /* ---- local ranking (this device only) ---- */
+        var SCORE_KEY = 'fooo-catch-scores-v1';
+        var myEntryId = 0;
+        function loadScores() {
+          try {
+            var arr = JSON.parse(localStorage.getItem(SCORE_KEY) || '[]');
+            return Array.isArray(arr) ? arr : [];
+          } catch (e) { return []; }
+        }
+        function saveScores(arr) {
+          try { localStorage.setItem(SCORE_KEY, JSON.stringify(arr)); } catch (e) {}
+        }
+        function recordScore() {
+          var arr = loadScores();
+          var nowD = new Date();
+          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+          var entry = {
+            id: nowD.getTime(),
+            s: score,
+            c: maxCombo,
+            d: (nowD.getMonth() + 1) + '/' + nowD.getDate() + ' ' + pad(nowD.getHours()) + ':' + pad(nowD.getMinutes())
+          };
+          arr.push(entry);
+          arr.sort(function (a, b) { return b.s - a.s; });
+          arr = arr.slice(0, 10);
+          saveScores(arr);
+          myEntryId = entry.id;
+          for (var i = 0; i < arr.length; i++) if (arr[i].id === entry.id) return i + 1;
+          return 0;
+        }
+        function renderRanking() {
+          var arr = loadScores();
+          rankListEl.innerHTML = '';
+          arr.slice(0, 5).forEach(function (e, i) {
+            var li = document.createElement('li');
+            if (e.id === myEntryId) li.className = 'now';
+            var rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = (i + 1) + '位';
+            var rd = document.createElement('span'); rd.className = 'rd'; rd.textContent = e.d + ' ／ 最大' + e.c + 'コンボ';
+            var rs = document.createElement('span'); rs.className = 'rs'; rs.textContent = e.s;
+            li.appendChild(rk); li.appendChild(rd); li.appendChild(rs);
+            rankListEl.appendChild(li);
+          });
+          rankBoxEl.hidden = arr.length === 0;
+        }
+        best = (loadScores()[0] || { s: 0 }).s;
         var elapsed = 0, spawnTimer = 0, shakeUntil = 0, shakeMag = 0;
 
         function itemFontSize() { return clamp(W * 0.075, 26, 44); }
@@ -496,14 +569,30 @@
         function gameOver() {
           state = STATE.OVER;
           var isRecord = score > best;
+          var rank = recordScore();
           if (isRecord) best = score;
           finalScoreEl.textContent = score;
           finalComboEl.textContent = '最大コンボ ' + maxCombo + ' ／ ベスト ' + best;
           newRecordEl.hidden = !isRecord;
+          finalRankEl.textContent = rank > 0 ? 'マイランキング ' + rank + '位！' : '';
+          renderRanking();
           overOverlay.hidden = false;
           updateHud();
           sndOver();
         }
+
+        shareBtn.addEventListener('click', function () {
+          var text = 'フォオキャッチで ' + score + '点（最大コンボ ' + maxCombo + '）！ ⊂U⊃ キャッチ、キミは超えられる？';
+          var url = location.href.split('#')[0];
+          if (navigator.share) {
+            navigator.share({ title: 'フォオキャッチ', text: text, url: url }).catch(function () {});
+          } else if (navigator.clipboard) {
+            navigator.clipboard.writeText(text + ' ' + url).then(function () {
+              shareBtn.textContent = 'コピーしたよ！';
+              setTimeout(function () { shareBtn.textContent = 'スコアを共有する'; }, 2000);
+            });
+          }
+        });
 
         function updateHud() {
           scoreEl.textContent = score;
