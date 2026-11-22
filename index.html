@@ -295,10 +295,12 @@
           3回落としたらゲームオーバー。連続キャッチでコンボが伸びるよ。</p>
           <p><span class="heal-word">緑のギザギザ</span> は取ると <b>ライフ全回復</b>！<br />
           めったに出ないし、速くてユラユラして取りづらいけど…！</p>
-          <p><b>1000点で第二面</b>：にせもの・逃げる・ヘンな落下物が混ざりだす。<br />
-          <b>5000点で第三面</b>：巨大ドカン、フォオゲージ、積み上がる床。もうカオス。</p>
+          <p><b>1000点で第2面</b>：にせもの・逃げる・ヘンな落下物が混ざりだす。<br />
+          <b>2000点で第3面</b>：小ネタ増量＆スピードアップ。<br />
+          <b>3000点で第4面</b>：巨大ドカン。 <b>4000点で第5面</b>：フォオゲージ解放。<br />
+          <b>5000点で第6面</b>：積み上がる床。もうカオス。</p>
           <button class="big-btn" id="startBtn" type="button">ゲームスタート</button>
-          <p class="test-row" id="testRow" hidden>テスト用：<button class="test-btn" id="start2Btn" type="button">2面から</button><button class="test-btn" id="start3Btn" type="button">3面から</button></p>
+          <p class="test-row" id="testRow" hidden>テスト用：<button class="test-btn" id="start2Btn" type="button">2面から</button><button class="test-btn" id="start3Btn" type="button">3面から</button><button class="test-btn" id="start4Btn" type="button">4面から</button><button class="test-btn" id="start5Btn" type="button">5面から</button><button class="test-btn" id="start6Btn" type="button">6面から</button></p>
           <button class="install-btn" id="installBtn" type="button" hidden>ホーム画面に追加</button>
           <p class="install-note">ホーム画面に追加すると、アプリみたいに全画面で遊べるよ。<br />
           iPhone：共有ボタン →「ホーム画面に追加」<br />
@@ -478,7 +480,14 @@
 
         var score = 0, best = 0, combo = 0, maxCombo = 0, lives = 3;
         var stage = 1, gauge = 0, pile = 0, stunUntil = 0, testMode = false;
-        var STAGE2_SCORE = 1000, STAGE3_SCORE = 5000;
+        var STAGE_SCORES = [0, 0, 1000, 2000, 3000, 4000, 5000];
+        var STAGE_MSGS = {
+          2: '第二面！ あやしいのが混ざりだした',
+          3: '第三面！ 小ネタ増量＆スピードアップ',
+          4: '第四面！ 巨大なのが来る',
+          5: '第五面！ フォオゲージ解放',
+          6: '第六面！ 床が積み上がる'
+        };
 
         /* ---- local ranking (this device only) ---- */
         var SCORE_KEY = 'fooo-catch-scores-v1';
@@ -553,12 +562,13 @@
           else if (r < 0.17) kind = 'gold';
           else {
             var r2 = Math.random();
-            if (stage >= 3 && r2 < 0.06) kind = 'giant';
-            else if (stage >= 2 && r2 < 0.20) kind = 'fake';
-            else if (stage >= 2 && r2 < 0.30) kind = 'dodge';
-            else if (stage >= 2 && r2 < 0.38) kind = 'junk';
+            if (stage >= 4 && r2 < 0.06) kind = 'giant';
+            else if (stage >= 2 && r2 < (stage >= 3 ? 0.25 : 0.20)) kind = 'fake';
+            else if (stage >= 2 && r2 < (stage >= 3 ? 0.37 : 0.30)) kind = 'dodge';
+            else if (stage >= 2 && r2 < (stage >= 3 ? 0.47 : 0.38)) kind = 'junk';
           }
           var speedBase = 120 + elapsed * 6 + Math.random() * 60;
+          if (stage >= 3) speedBase *= 1.15;
           var it = {
             x: fs + Math.random() * (W - fs * 2),
             y: -30,
@@ -605,17 +615,18 @@
         }
 
         function checkStage() {
-          var ns = score >= STAGE3_SCORE ? 3 : (score >= STAGE2_SCORE ? 2 : 1);
+          var ns = 1;
+          for (var si = 2; si <= 6; si++) if (score >= STAGE_SCORES[si]) ns = si;
           if (ns > stage) {
             stage = ns;
-            addPopup(W / 2, H * 0.32, ns === 2 ? '第二面！ あやしいのが混ざりだした' : '第三面！ もうカオス', colors.accent, 25);
+            addPopup(W / 2, H * 0.32, STAGE_MSGS[ns], colors.accent, 25);
             sndStage();
             updateHud();
           }
         }
 
         function gainGauge(n) {
-          if (stage < 3) return;
+          if (stage < 5) return;
           gauge = Math.min(100, gauge + n);
         }
 
@@ -649,7 +660,7 @@
           ensureAudio();
           score = 0; combo = 0; maxCombo = 0; lives = 3;
           stage = 1; gauge = 0; pile = 0; stunUntil = 0;
-          testMode = fromStage === 2 || fromStage === 3;
+          testMode = fromStage >= 2 && fromStage <= 6;
           if (testMode) {
             stage = fromStage;
             myEntryId = 0;
@@ -697,7 +708,7 @@
 
         function updateHud() {
           stageEl.textContent = stage + '面';
-          gaugeWrap.hidden = stage < 3;
+          gaugeWrap.hidden = stage < 5;
           gaugeFill.style.width = gauge + '%';
           gaugeWrap.classList.toggle('ready', gauge >= 100);
           scoreEl.textContent = score;
@@ -715,14 +726,32 @@
           var rect = canvas.getBoundingClientRect();
           return clamp(clientX - rect.left, 0, W);
         }
+        var touchDrag = null;
+        var touchActive = false;
         canvas.addEventListener('pointermove', function (e) {
-          player.targetX = pointerToX(e.clientX);
+          if (e.pointerType === 'touch') {
+            if (touchDrag && e.pointerId === touchDrag.id) {
+              player.targetX = clamp(touchDrag.startTargetX + (e.clientX - touchDrag.startClientX) * 1.15, 0, W);
+            }
+          } else {
+            player.targetX = pointerToX(e.clientX);
+          }
         });
         canvas.addEventListener('pointerdown', function (e) {
-          player.targetX = pointerToX(e.clientX);
+          if (e.pointerType === 'touch') {
+            touchDrag = { id: e.pointerId, startClientX: e.clientX, startTargetX: player.targetX };
+            touchActive = true;
+          } else {
+            player.targetX = pointerToX(e.clientX);
+          }
           ensureAudio();
           if (gauge >= 100) activateFooo();
         });
+        function endTouch(e) {
+          if (touchDrag && e.pointerId === touchDrag.id) { touchDrag = null; touchActive = false; }
+        }
+        canvas.addEventListener('pointerup', endTouch);
+        canvas.addEventListener('pointercancel', endTouch);
         var keys = {};
         window.addEventListener('keydown', function (e) {
           keys[e.key] = true;
@@ -738,7 +767,7 @@
         var urlStage = 0;
         try {
           var qs = new URLSearchParams(location.search).get('stage');
-          if (qs === '2' || qs === '3') urlStage = parseInt(qs, 10);
+          if (qs && /^[2-6]$/.test(qs)) urlStage = parseInt(qs, 10);
         } catch (e) {}
         function startDefault() { startGame(urlStage >= 2 ? urlStage : 1); }
         document.getElementById('startBtn').addEventListener('click', startDefault);
@@ -755,6 +784,9 @@
         });
         document.getElementById('start2Btn').addEventListener('click', function () { startGame(2); });
         document.getElementById('start3Btn').addEventListener('click', function () { startGame(3); });
+        document.getElementById('start4Btn').addEventListener('click', function () { startGame(4); });
+        document.getElementById('start5Btn').addEventListener('click', function () { startGame(5); });
+        document.getElementById('start6Btn').addEventListener('click', function () { startGame(6); });
 
         /* ---------------- PWA: standalone / install ---------------- */
         var installBtn = document.getElementById('installBtn');
@@ -934,21 +966,21 @@
             }
 
             // missed
-            var groundY = H + 20 - (stage >= 3 ? pile * 16 : 0);
+            var groundY = H + 20 - pile * 16;
             if (it.y > groundY) {
               items.splice(j, 1);
               if (it.kind === 'normal' || it.kind === 'dodge') {
                 lives--;
                 combo = 0;
-                if (stage >= 3 && pile < 5) pile++;
+                if (stage >= 6 && pile < 5) pile++;
                 player.mood = 'sad';
                 player.moodUntil = now + 700;
                 shakeUntil = now + 220; shakeMag = 6;
-                addPopup(ix, H - 90 - (stage >= 3 ? pile * 16 : 0), 'おとした…', colors.soft, 17);
+                addPopup(ix, H - 90 - pile * 16, 'おとした…', colors.soft, 17);
                 sndMiss();
                 updateHud();
                 if (lives <= 0) { gameOver(); return; }
-              } else if (it.kind === 'gold' && stage >= 3 && pile < 5) {
+              } else if (it.kind === 'gold' && stage >= 6 && pile < 5) {
                 pile++;
                 addPopup(ix, H - 90 - pile * 16, 'つまれた…', colors.soft, 15);
                 updateHud();
@@ -1103,12 +1135,13 @@
           } else {
             ctx.fillStyle = colors.ink;
           }
-          ctx.fillText(body, player.x, player.y);
+          var drawY = player.y - (touchActive ? 38 : 0);
+          ctx.fillText(body, player.x, drawY);
           if (player.mood === 'happy') {
             ctx.font = '800 ' + Math.round(pfs * 0.5) + 'px ' + FONT;
             ctx.fillStyle = colors.accent;
             ctx.textAlign = 'left';
-            ctx.fillText('フォオ', player.x + pfs * 1.7, player.y - pfs * 0.15);
+            ctx.fillText('フォオ', player.x + pfs * 1.7, drawY - pfs * 0.15);
             ctx.textAlign = 'center';
           }
 
