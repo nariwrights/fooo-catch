@@ -231,6 +231,11 @@
         font-size: 15px; font-weight: 700; cursor: pointer;
       }
       .share-btn:active { transform: scale(0.97); }
+      .gauge { display: inline-block; width: 62px; height: 10px; border: 1.5px solid var(--ink); border-radius: 99px; overflow: hidden; vertical-align: middle; background: transparent; }
+      #gaugeFill { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
+      .gauge-wrap { cursor: pointer; }
+      .gauge-wrap.ready { animation: gaugePulse 0.7s infinite alternate; }
+      @keyframes gaugePulse { from { transform: scale(1); } to { transform: scale(1.12); } }
       .new-record {
         display: inline-block;
         margin-top: 0.5rem;
@@ -260,6 +265,8 @@
       <div class="stat">スコア <b id="score">0</b></div>
       <div class="stat">ベスト <b id="best">0</b></div>
       <div class="stat">コンボ <b id="combo">0</b></div>
+      <div class="stat"><b id="stage">1面</b></div>
+      <div class="stat gauge-wrap" id="gaugeWrap" hidden>フォオ <span class="gauge"><span id="gaugeFill"></span></span></div>
       <div class="lives" id="lives" aria-label="残りライフ">♥♥♥</div>
       <div class="spacer"></div>
       <button class="icon-btn" id="soundBtn" type="button" aria-label="音のオン・オフ">音 オン</button>
@@ -281,6 +288,8 @@
           3回落としたらゲームオーバー。連続キャッチでコンボが伸びるよ。</p>
           <p><span class="heal-word">緑のギザギザ</span> は取ると <b>ライフ全回復</b>！<br />
           めったに出ないし、速くてユラユラして取りづらいけど…！</p>
+          <p><b>2000点で第二面</b>：にせもの・逃げる・ヘンな落下物が混ざりだす。<br />
+          <b>5000点で第三面</b>：巨大ドカン、フォオゲージ、積み上がる床。もうカオス。</p>
           <button class="big-btn" id="startBtn" type="button">ゲームスタート</button>
           <button class="install-btn" id="installBtn" type="button" hidden>ホーム画面に追加</button>
           <p class="install-note">ホーム画面に追加すると、アプリみたいに全画面で遊べるよ。<br />
@@ -321,6 +330,9 @@
         var scoreEl = document.getElementById('score');
         var bestEl = document.getElementById('best');
         var comboEl = document.getElementById('combo');
+        var stageEl = document.getElementById('stage');
+        var gaugeWrap = document.getElementById('gaugeWrap');
+        var gaugeFill = document.getElementById('gaugeFill');
         var livesEl = document.getElementById('lives');
         var startOverlay = document.getElementById('startOverlay');
         var overOverlay = document.getElementById('overOverlay');
@@ -412,6 +424,15 @@
           setTimeout(function () { blip(1568, 0.18, 'triangle', 0.14); }, 120);
         }
         function sndMiss() { blip(220, 0.25, 'sawtooth', 0.07, 110); }
+        function sndStage() {
+          blip(659, 0.1, 'square', 0.1);
+          setTimeout(function () { blip(880, 0.1, 'square', 0.1); }, 80);
+          setTimeout(function () { blip(1318, 0.2, 'square', 0.12); }, 160);
+        }
+        function sndGiant() {
+          blip(95, 0.35, 'sawtooth', 0.2, 45);
+          setTimeout(function () { blip(140, 0.2, 'square', 0.12, 70); }, 60);
+        }
         function sndHeal() {
           blip(523, 0.1, 'triangle', 0.15);
           setTimeout(function () { blip(659, 0.1, 'triangle', 0.15); }, 70);
@@ -448,6 +469,8 @@
         var snow = [];       // background drifting 。
 
         var score = 0, best = 0, combo = 0, maxCombo = 0, lives = 3;
+        var stage = 1, gauge = 0, pile = 0, stunUntil = 0;
+        var STAGE2_SCORE = 2000, STAGE3_SCORE = 5000;
 
         /* ---- local ranking (this device only) ---- */
         var SCORE_KEY = 'fooo-catch-scores-v1';
@@ -516,19 +539,41 @@
 
         function spawnItem() {
           var fs = itemFontSize();
-          var heal = Math.random() < 0.05;
-          var gold = !heal && Math.random() < 0.12;
+          var kind = 'normal';
+          var r = Math.random();
+          if (r < 0.05) kind = 'heal';
+          else if (r < 0.17) kind = 'gold';
+          else {
+            var r2 = Math.random();
+            if (stage >= 3 && r2 < 0.06) kind = 'giant';
+            else if (stage >= 2 && r2 < 0.20) kind = 'fake';
+            else if (stage >= 2 && r2 < 0.30) kind = 'dodge';
+            else if (stage >= 2 && r2 < 0.38) kind = 'junk';
+          }
           var speedBase = 120 + elapsed * 6 + Math.random() * 60;
-          items.push({
+          var it = {
             x: fs + Math.random() * (W - fs * 2),
             y: -30,
-            vy: heal ? speedBase * 1.5 : (gold ? speedBase * 1.25 : speedBase),
+            vy: speedBase,
             swayPhase: Math.random() * Math.PI * 2,
-            swayAmp: heal ? 26 + Math.random() * 18 : 8 + Math.random() * 16,
-            gold: gold,
-            heal: heal,
-            spin: Math.random() * Math.PI * 2
-          });
+            swayAmp: 8 + Math.random() * 16,
+            gold: kind === 'gold',
+            heal: kind === 'heal',
+            kind: kind,
+            spin: Math.random() * Math.PI * 2,
+            glyph: null,
+            label: null
+          };
+          if (kind === 'heal') { it.vy = speedBase * 1.5; it.swayAmp = 26 + Math.random() * 18; }
+          if (kind === 'gold') { it.vy = speedBase * 1.25; }
+          if (kind === 'giant') { it.vy = speedBase * 0.55; it.swayAmp = 5; it.y = -70; }
+          if (kind === 'fake') { it.glyph = ['⊂∩⊃', '⊃U⊂', '⊂∪⊃'][Math.floor(Math.random() * 3)]; }
+          if (kind === 'dodge') { it.vy = speedBase * 1.1; }
+          if (kind === 'junk') {
+            it.label = ['請求書', '月曜日', '洗濯バサミ', '靴下(片方)', 'Wi-Fiの紙'][Math.floor(Math.random() * 5)];
+            it.vy = speedBase * 0.9;
+          }
+          items.push(it);
         }
 
         function burst(x, y, gold, heal) {
@@ -551,9 +596,51 @@
           popups.push({ x: x, y: y, text: text, color: color, size: size || 20, life: 0.9, maxLife: 0.9 });
         }
 
+        function checkStage() {
+          var ns = score >= STAGE3_SCORE ? 3 : (score >= STAGE2_SCORE ? 2 : 1);
+          if (ns > stage) {
+            stage = ns;
+            addPopup(W / 2, H * 0.32, ns === 2 ? '第二面！ あやしいのが混ざりだした' : '第三面！ もうカオス', colors.accent, 25);
+            sndStage();
+            updateHud();
+          }
+        }
+
+        function gainGauge(n) {
+          if (stage < 3) return;
+          gauge = Math.min(100, gauge + n);
+        }
+
+        function activateFooo() {
+          if (state !== STATE.PLAYING || gauge < 100) return;
+          gauge = 0;
+          var sum = 0, healed = false;
+          for (var i = items.length - 1; i >= 0; i--) {
+            var it = items[i];
+            var ix2 = it.x + Math.sin(it.swayPhase) * it.swayAmp;
+            burst(ix2, it.y, it.gold, it.heal);
+            if (it.kind === 'gold') sum += 50;
+            else if (it.kind === 'giant') sum += 200;
+            else if (it.kind === 'dodge') sum += 30;
+            else if (it.kind === 'junk') sum += 1;
+            else if (it.kind === 'heal') healed = true;
+            else if (it.kind === 'normal') sum += 10;
+            items.splice(i, 1);
+          }
+          if (healed) lives = 3;
+          score += sum;
+          addPopup(W / 2, H * 0.4, 'フォオオオ！！ 全回収 +' + sum, colors.accent, 27);
+          sndHeal();
+          shakeUntil = performance.now() + 250; shakeMag = 5;
+          checkStage();
+          updateHud();
+        }
+        gaugeWrap.addEventListener('click', activateFooo);
+
         function startGame() {
           ensureAudio();
           score = 0; combo = 0; maxCombo = 0; lives = 3;
+          stage = 1; gauge = 0; pile = 0; stunUntil = 0;
           elapsed = 0; spawnTimer = 0.4;
           items = []; particles = []; popups = [];
           player.mood = 'normal';
@@ -595,6 +682,10 @@
         });
 
         function updateHud() {
+          stageEl.textContent = stage + '面';
+          gaugeWrap.hidden = stage < 3;
+          gaugeFill.style.width = gauge + '%';
+          gaugeWrap.classList.toggle('ready', gauge >= 100);
           scoreEl.textContent = score;
           bestEl.textContent = best;
           comboEl.textContent = combo;
@@ -616,10 +707,12 @@
         canvas.addEventListener('pointerdown', function (e) {
           player.targetX = pointerToX(e.clientX);
           ensureAudio();
+          if (gauge >= 100) activateFooo();
         });
         var keys = {};
         window.addEventListener('keydown', function (e) {
           keys[e.key] = true;
+          if ((e.key === 'f' || e.key === 'F') && gauge >= 100) activateFooo();
           if ((e.key === ' ' || e.key === 'Enter') && state !== STATE.PLAYING) {
             e.preventDefault();
             startGame();
@@ -691,8 +784,8 @@
           if (keys['ArrowRight'] || keys['d']) player.targetX += kSpeed;
           player.targetX = clamp(player.targetX, 0, W);
 
-          // player eases toward target
-          player.x += (player.targetX - player.x) * Math.min(1, dt * 18);
+          // player eases toward target (frozen while stunned by a giant)
+          if (now >= stunUntil) player.x += (player.targetX - player.x) * Math.min(1, dt * 18);
           player.x = clamp(player.x, 0, W);
 
           // spawning: interval shrinks over time
@@ -712,13 +805,57 @@
             it.y += it.vy * dt;
             it.swayPhase += dt * (it.heal ? 4.2 : 2);
             if (it.heal) it.spin += dt * 3;
+            if (it.kind === 'dodge') {
+              var curX = it.x + Math.sin(it.swayPhase) * it.swayAmp;
+              if (it.y > player.y - 320 && Math.abs(curX - player.x) < 95) {
+                it.x += (curX < player.x ? -1 : 1) * 300 * dt;
+                it.x = Math.max(20, Math.min(W - 20, it.x));
+              }
+            }
             var ix = it.x + Math.sin(it.swayPhase) * it.swayAmp;
 
             // caught?
-            var myCatchHalf = it.heal ? pfs * 0.8 : catchHalf;
+            var myCatchHalf = it.heal ? pfs * 0.8 : (it.kind === 'giant' ? pfs * 2.3 : catchHalf);
             if (it.y >= player.y - ifs * 0.55 && it.y <= player.y + 14 &&
                 Math.abs(ix - player.x) <= myCatchHalf) {
               items.splice(j, 1);
+              if (it.kind === 'fake') {
+                score = Math.max(0, score - 100);
+                combo = 0;
+                player.mood = 'sad';
+                player.moodUntil = now + 500;
+                burst(ix, player.y - ifs * 0.4, false, false);
+                addPopup(ix, player.y - ifs * 1.7, 'にせもの！ −100', colors.accent, 21);
+                blip(160, 0.2, 'square', 0.09, 85);
+                updateHud();
+                continue;
+              }
+              if (it.kind === 'junk') {
+                score += 1;
+                var junkWords = ['なんで落ちてきた？', 'これはいらない', 'あるある…', 'フォオ…？'];
+                burst(ix, player.y - ifs * 0.4, false, false);
+                addPopup(ix, player.y - ifs * 1.7, junkWords[Math.floor(Math.random() * junkWords.length)] + ' +1', colors.soft, 16);
+                blip(300, 0.09, 'sine', 0.08);
+                checkStage();
+                updateHud();
+                continue;
+              }
+              if (it.kind === 'giant') {
+                combo++;
+                if (combo > maxCombo) maxCombo = combo;
+                score += 200;
+                stunUntil = now + 850;
+                shakeUntil = now + 420; shakeMag = 13;
+                player.mood = 'happy';
+                player.moodUntil = now + 600;
+                burst(ix, player.y - ifs * 0.4, false, false);
+                addPopup(ix, player.y - ifs * 1.9, 'ドカン！ +200', colors.accent, 28);
+                sndGiant();
+                gainGauge(10);
+                checkStage();
+                updateHud();
+                continue;
+              }
               if (it.heal) {
                 player.mood = 'happy';
                 player.moodUntil = now + 600;
@@ -731,14 +868,20 @@
                   score += 50;
                   addPopup(ix, player.y - ifs * 1.7, 'ライフ全快！ +50', colors.heal, 22);
                 }
+                pile = 0;
                 sndHeal();
+                gainGauge(6);
+                checkStage();
                 updateHud();
                 continue;
               }
               combo++;
               if (combo > maxCombo) maxCombo = combo;
               var pts = it.gold ? 50 : 10 + Math.min(40, Math.floor(combo / 5) * 5);
+              if (it.kind === 'dodge') pts += 20;
               score += pts;
+              if (it.gold && pile > 0) pile--;
+              gainGauge(it.gold ? 8 : 4);
               player.mood = 'happy';
               player.moodUntil = now + 450;
               player.catchFlashUntil = now + 180;
@@ -748,26 +891,34 @@
                 sndGold();
               } else {
                 var word = combo >= 10 ? 'フォオオ！' : (combo >= 5 ? 'フォオ！' : 'フォッ');
+                if (it.kind === 'dodge') word = 'つかまえた！';
                 addPopup(ix, player.y - ifs * 1.6, word + ' +' + pts, colors.accent, combo >= 5 ? 22 : 17);
                 sndCatch(combo);
               }
+              checkStage();
               updateHud();
               continue;
             }
 
             // missed
-            if (it.y > H + 20) {
+            var groundY = H + 20 - (stage >= 3 ? pile * 16 : 0);
+            if (it.y > groundY) {
               items.splice(j, 1);
-              if (!it.gold && !it.heal) {
+              if (it.kind === 'normal' || it.kind === 'dodge') {
                 lives--;
                 combo = 0;
+                if (stage >= 3 && pile < 5) pile++;
                 player.mood = 'sad';
                 player.moodUntil = now + 700;
                 shakeUntil = now + 220; shakeMag = 6;
-                addPopup(ix, H - 90, 'おとした…', colors.soft, 17);
+                addPopup(ix, H - 90 - (stage >= 3 ? pile * 16 : 0), 'おとした…', colors.soft, 17);
                 sndMiss();
                 updateHud();
                 if (lives <= 0) { gameOver(); return; }
+              } else if (it.kind === 'gold' && stage >= 3 && pile < 5) {
+                pile++;
+                addPopup(ix, H - 90 - pile * 16, 'つまれた…', colors.soft, 15);
+                updateHud();
               }
             }
           }
@@ -793,6 +944,7 @@
         }
 
         /* ---------------- Draw ---------------- */
+        function ifs0() { return itemFontSize(); }
         function draw(now) {
           ctx.clearRect(0, 0, W, H);
 
@@ -826,12 +978,45 @@
           ctx.stroke();
           ctx.globalAlpha = 1;
 
+          // piled-up misses (stage 3): the floor rises
+          if (pile > 0) {
+            ctx.font = '700 ' + Math.round(ifs0() * 0.8) + 'px ' + FONT;
+            ctx.fillStyle = colors.soft;
+            for (var pl = 0; pl < pile; pl++) {
+              ctx.globalAlpha = 0.45;
+              var py = H - 30 - pl * 16;
+              for (var px = 24; px < W - 10; px += ifs0() * 1.85) {
+                ctx.fillText('⊂U⊃', px, py);
+              }
+            }
+            ctx.globalAlpha = 1;
+          }
+
           // falling items
           var ifs = itemFontSize();
           ctx.font = '700 ' + ifs + 'px ' + FONT;
           for (var j = 0; j < items.length; j++) {
             var it = items[j];
             var ix = it.x + Math.sin(it.swayPhase) * it.swayAmp;
+            if (it.kind === 'fake') {
+              ctx.fillStyle = colors.ink;
+              ctx.fillText(it.glyph, ix, it.y);
+              continue;
+            }
+            if (it.kind === 'junk') {
+              ctx.font = '700 ' + Math.round(ifs * 0.52) + 'px ' + FONT;
+              ctx.fillStyle = colors.soft;
+              ctx.fillText(it.label, ix, it.y);
+              ctx.font = '700 ' + ifs + 'px ' + FONT;
+              continue;
+            }
+            if (it.kind === 'giant') {
+              ctx.font = '700 ' + Math.round(ifs * 2.6) + 'px ' + FONT;
+              ctx.fillStyle = colors.ink;
+              ctx.fillText('⊂U⊃', ix, it.y);
+              ctx.font = '700 ' + ifs + 'px ' + FONT;
+              continue;
+            }
             if (it.heal) {
               // jagged spiky star, rotating
               var R = ifs * 0.62, r2 = ifs * 0.3, spikes = 9;
@@ -878,7 +1063,7 @@
           // player
           var pfs = playerFontSize();
           ctx.font = '700 ' + pfs + 'px ' + FONT;
-          var face = player.mood === 'sad' ? "('；ω；')" : player.face;
+          var face = now < stunUntil ? "('×ω×')" : (player.mood === 'sad' ? "('；ω；')" : player.face);
           var body = '└' + face + '┘';
           if (now < player.catchFlashUntil) {
             ctx.fillStyle = colors.accent;
