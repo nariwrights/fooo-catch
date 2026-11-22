@@ -862,11 +862,12 @@
           }
 
           var pfs = playerFontSize();
-          var catchHalf = pfs * 1.55; // roughly half the width of └('ω')┘
           var ifs = itemFontSize();
+          var catchHalf = pfs * 1.8 + ifs * 0.5; // generous: face width + item half-width
 
           for (var j = items.length - 1; j >= 0; j--) {
             var it = items[j];
+            it.prevY = it.y;
             it.y += it.vy * dt;
             it.swayPhase += dt * (it.heal ? 4.2 : 2);
             if (it.heal) it.spin += dt * 3;
@@ -880,8 +881,9 @@
             var ix = it.x + Math.sin(it.swayPhase) * it.swayAmp;
 
             // caught?
-            var myCatchHalf = it.heal ? pfs * 0.8 : (it.kind === 'giant' ? pfs * 2.3 : catchHalf);
-            if (it.y >= player.y - ifs * 0.55 && it.y <= player.y + 14 &&
+            var myCatchHalf = it.heal ? pfs * 1.05 : (it.kind === 'giant' ? pfs * 2.6 : catchHalf);
+            var bandTop = player.y - ifs * 0.8, bandBottom = player.y + 24;
+            if (it.y >= bandTop && it.prevY <= bandBottom &&
                 Math.abs(ix - player.x) <= myCatchHalf) {
               items.splice(j, 1);
               if (it.kind === 'fake') {
