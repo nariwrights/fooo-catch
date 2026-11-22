@@ -235,6 +235,13 @@
       #gaugeFill { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
       .gauge-wrap { cursor: pointer; }
       .gauge-wrap.ready { animation: gaugePulse 0.7s infinite alternate; }
+      .test-row { margin-top: 12px; font-size: 13px; color: var(--ink-soft); }
+      .test-btn {
+        margin-left: 6px; padding: 6px 12px; border-radius: 999px;
+        border: 1.5px dashed var(--ink-soft); background: transparent; color: var(--ink-soft);
+        font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+      .test-btn:active { transform: scale(0.96); }
       @keyframes gaugePulse { from { transform: scale(1); } to { transform: scale(1.12); } }
       .new-record {
         display: inline-block;
@@ -291,6 +298,7 @@
           <p><b>1000点で第二面</b>：にせもの・逃げる・ヘンな落下物が混ざりだす。<br />
           <b>5000点で第三面</b>：巨大ドカン、フォオゲージ、積み上がる床。もうカオス。</p>
           <button class="big-btn" id="startBtn" type="button">ゲームスタート</button>
+          <p class="test-row">テスト用：<button class="test-btn" id="start2Btn" type="button">2面から</button><button class="test-btn" id="start3Btn" type="button">3面から</button></p>
           <button class="install-btn" id="installBtn" type="button" hidden>ホーム画面に追加</button>
           <p class="install-note">ホーム画面に追加すると、アプリみたいに全画面で遊べるよ。<br />
           iPhone：共有ボタン →「ホーム画面に追加」<br />
@@ -469,7 +477,7 @@
         var snow = [];       // background drifting 。
 
         var score = 0, best = 0, combo = 0, maxCombo = 0, lives = 3;
-        var stage = 1, gauge = 0, pile = 0, stunUntil = 0;
+        var stage = 1, gauge = 0, pile = 0, stunUntil = 0, testMode = false;
         var STAGE2_SCORE = 1000, STAGE3_SCORE = 5000;
 
         /* ---- local ranking (this device only) ---- */
@@ -637,10 +645,15 @@
         }
         gaugeWrap.addEventListener('click', activateFooo);
 
-        function startGame() {
+        function startGame(fromStage) {
           ensureAudio();
           score = 0; combo = 0; maxCombo = 0; lives = 3;
           stage = 1; gauge = 0; pile = 0; stunUntil = 0;
+          testMode = fromStage === 2 || fromStage === 3;
+          if (testMode) {
+            stage = fromStage;
+            myEntryId = 0;
+          }
           elapsed = 0; spawnTimer = 0.4;
           items = []; particles = []; popups = [];
           player.mood = 'normal';
@@ -648,6 +661,7 @@
           state = STATE.PLAYING;
           startOverlay.hidden = true;
           overOverlay.hidden = true;
+          if (testMode) addPopup(W / 2, H * 0.3, 'テスト： ' + stage + '面からスタート', colors.soft, 19);
           updateHud();
           blip(523, 0.1, 'triangle', 0.1);
           setTimeout(function () { blip(784, 0.14, 'triangle', 0.1); }, 90);
@@ -656,12 +670,12 @@
         function gameOver() {
           state = STATE.OVER;
           var isRecord = score > best;
-          var rank = recordScore();
+          var rank = testMode ? 0 : recordScore();
           if (isRecord) best = score;
           finalScoreEl.textContent = score;
           finalComboEl.textContent = '最大コンボ ' + maxCombo + ' ／ ベスト ' + best;
           newRecordEl.hidden = !isRecord;
-          finalRankEl.textContent = rank > 0 ? 'マイランキング ' + rank + '位！' : '';
+          finalRankEl.textContent = testMode ? 'テストプレイ（ランキング記録なし）' : (rank > 0 ? 'マイランキング ' + rank + '位！' : '');
           renderRanking();
           overOverlay.hidden = false;
           updateHud();
@@ -715,13 +729,15 @@
           if ((e.key === 'f' || e.key === 'F') && gauge >= 100) activateFooo();
           if ((e.key === ' ' || e.key === 'Enter') && state !== STATE.PLAYING) {
             e.preventDefault();
-            startGame();
+            startGame(1);
           }
         });
         window.addEventListener('keyup', function (e) { keys[e.key] = false; });
 
-        document.getElementById('startBtn').addEventListener('click', startGame);
-        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('startBtn').addEventListener('click', function () { startGame(1); });
+        document.getElementById('retryBtn').addEventListener('click', function () { startGame(1); });
+        document.getElementById('start2Btn').addEventListener('click', function () { startGame(2); });
+        document.getElementById('start3Btn').addEventListener('click', function () { startGame(3); });
 
         /* ---------------- PWA: standalone / install ---------------- */
         var installBtn = document.getElementById('installBtn');
